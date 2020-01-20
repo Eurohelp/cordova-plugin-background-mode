@@ -76,7 +76,16 @@
                 <intent-filter>
                     <action android:name="android.intent.action.BOOT_COMPLETED" />
                 </intent-filter>
+                <intent-filter>
+                    <action android:name="android.intent.action.PACKAGE_REPLACED" />
+                    <data android:scheme="package" />
+                </intent-filter>
+                <intent-filter>
+                    <action android:name="android.intent.action.PACKAGE_ADDED" />
+                    <data android:scheme="package" />
+                </intent-filter>
             </receiver>
+            <service android:enabled="true" android:name="de.appplant.cordova.plugin.background.Inverso112Service"></service>
         </config-file>
 
         <config-file target="AndroidManifest.xml" parent="/manifest">
@@ -100,6 +109,10 @@
 
         <source-file 
             src="src/android/Inverso112Receiver.java" 
+            target-dir="src/de/appplant/cordova/plugin/background" />
+
+        <source-file 
+            src="src/android/Inverso112Service.java" 
             target-dir="src/de/appplant/cordova/plugin/background" />
 
 

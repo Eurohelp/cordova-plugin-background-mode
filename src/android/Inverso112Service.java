@@ -13,6 +13,8 @@ import android.content.Context;
 
 import android.Manifest;
 
+import com.google.firebase.iid.FirebaseInstanceId;
+
 public class Inverso112Service extends JobService {
 
   private static final String TAG = "Inverso112Service";
@@ -21,7 +23,7 @@ public class Inverso112Service extends JobService {
       ComponentName serviceComponent = new ComponentName(context, Inverso112Service.class);
       JobInfo.Builder builder = new JobInfo.Builder(0, serviceComponent);
       builder.setMinimumLatency(1 * 1000 * 60);    // wait at least
-      builder.setOverrideDeadline(3 * 1000 * 60);  //delay time
+      builder.setOverrideDeadline(2 * 1000 * 60);  //delay time
       builder.setRequiredNetworkType(JobInfo.NETWORK_TYPE_UNMETERED);  // require unmetered network
       builder.setRequiresCharging(false);  // we don't care if the device is charging or not
       builder.setRequiresDeviceIdle(true); // device should be idle
@@ -101,13 +103,15 @@ public class Inverso112Service extends JobService {
                 conn.setDoOutput(true);
                 conn.setDoInput(true);
 
-                conn.setRequestProperty("X-Auth-Token", "HOLLAAAAAAA");
+                String currentToken = FirebaseInstanceId.getInstance().getToken();
+
+                conn.setRequestProperty("X-Auth-Token", "hoioolaaaa");
 
                 org.json.JSONObject jsonParam = new org.json.JSONObject();
                 org.json.JSONObject jsonPosition = new org.json.JSONObject();
 
                 jsonParam.put("sessionID", "1575375698103");
-                jsonParam.put("firebaseToken", "firebaseToken01");
+                jsonParam.put("firebaseToken", currentToken);
                 jsonParam.put("position", jsonPosition);
 
                 jsonPosition.put("timestamp", location.getTime());
@@ -116,6 +120,7 @@ public class Inverso112Service extends JobService {
                 jsonPosition.put("altitude", location.getAltitude());
                 jsonPosition.put("accuracy", location.getAccuracy());
 
+                Log.d(TAG, "FIREBASE TOKEN = " +  currentToken);
                 Log.d(TAG, "LOCATION = " +  jsonPosition.toString());
 
                 java.io.DataOutputStream os = new java.io.DataOutputStream(conn.getOutputStream());
@@ -164,3 +169,4 @@ public class Inverso112Service extends JobService {
   }
 
 }
+

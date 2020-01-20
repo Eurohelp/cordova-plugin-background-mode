@@ -1,3 +1,5 @@
+package de.appplant.cordova.plugin.background;
+
 import android.content.Intent;
 import android.content.BroadcastReceiver;
 import android.content.pm.ActivityInfo;

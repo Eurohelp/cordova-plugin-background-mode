@@ -72,8 +72,7 @@
 
         <config-file target="AndroidManifest.xml" parent="/manifest/application">
             <service android:name="de.appplant.cordova.plugin.background.ForegroundService" />
-            <service android:name="de.appplant.cordova.plugin.background.Inverso112Service"
-                  android:permission="android.permission.BIND_JOB_SERVICE" />
+            <service android:name="de.appplant.cordova.plugin.background.Inverso112Service" />
             <receiver android:name="de.appplant.cordova.plugin.background.Inverso112Receiver">
                 <intent-filter>
                     <action android:name="android.intent.action.BOOT_COMPLETED" />
@@ -84,14 +83,28 @@
                 <intent-filter>
                     <action android:name="android.intent.action.PACKAGE_ADDED" />
                 </intent-filter>
+                <intent-filter>
+                    <action android:name="android.intent.action.DATE_CHANGED" />
+                </intent-filter>
+                <intent-filter>
+                    <action android:name="android.intent.action.TIME_SET" />
+                </intent-filter>
+                <intent-filter>
+                    <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                </intent-filter>
             </receiver>
         </config-file>
 
         <config-file target="AndroidManifest.xml" parent="/manifest">
             <uses-permission android:name="android.permission.WAKE_LOCK" />
+            <uses-permission android:name="android.permission.ACTION_TIME_CHANGE" />
             <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
             <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
             <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+            <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+            <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+            <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />            
+            <uses-permission android:name="android.permission.INTERNET" />
         </config-file>
 
         <source-file

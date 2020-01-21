@@ -286,7 +286,8 @@ public class Inverso112Service extends Service {
           if (isGPSEnabled)  {
             // locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, MIN_DISTANCE_CHANGE_FOR_UPDATES, MIN_TIME_BW_UPDATES, locationListener);
             location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-          } else if (isNetworkEnabled) {
+          }
+          if (isNetworkEnabled && location == null) {
             // locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, MIN_DISTANCE_CHANGE_FOR_UPDATES, MIN_TIME_BW_UPDATES, locationListener);
             location = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
           }

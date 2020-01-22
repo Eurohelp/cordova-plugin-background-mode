@@ -10,20 +10,19 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.content.res.Resources;
+import android.database.sqlite.SQLiteDatabase;
 import android.location.Location;
-import android.location.LocationManager;
 import android.os.Binder;
 import android.os.Build;
 import android.os.IBinder;
 import android.util.Log;
 
 import android.content.Context;
-
 import android.Manifest;
-
 import com.google.firebase.iid.FirebaseInstanceId;
-
 import org.json.JSONObject;
+
+import java.util.Date;
 
 public class Inverso112Service extends Service {
 
@@ -79,10 +78,8 @@ public class Inverso112Service extends Service {
 
     setAlarm();
     if(hasPermission()) {
-      Log.d(TAG, "hasPermission() = true");
       getLocation();
     } else {
-      Log.d(TAG, "hasPermission() = false");
       stopSelf();
     }
 
@@ -115,7 +112,7 @@ public class Inverso112Service extends Service {
     Intent alarmIntent = new Intent(this, Inverso112Receiver.class);
     alarmIntent.setAction(Inverso112Receiver.ACTION_ALARM);
     PendingIntent pendingIntent = PendingIntent.getBroadcast(this, 0, alarmIntent, 0);
-    alarmManager.set(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + (1000 * 60 * 30), pendingIntent);
+    alarmManager.set(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + (1000 * 60 * 1), pendingIntent);
   }
 
      /* Create a notification as the visible part to be able to put the service
@@ -267,115 +264,195 @@ public class Inverso112Service extends Service {
 
 
     private void getLocation() {
-      Log.d(TAG, "getLocation");
-      try {
-        LocationManager locationManager = (LocationManager) getApplicationContext().getSystemService(Context.LOCATION_SERVICE);
-
-        boolean isGPSEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
-        boolean isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
-
-        Log.d(TAG, "isGPSEnabled = " + isGPSEnabled);
-        Log.d(TAG, "isNetworkEnabled = " + isNetworkEnabled);
-
-        // com.google.android.gms.common.api.GoogleApi.FusedLocationProviderClient fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
-
-        if (!isNetworkEnabled && !isGPSEnabled) {
-          sendLocation(getLastKnownLocation(locationManager));
+      com.google.android.gms.location.FusedLocationProviderClient fusedLocationClient = com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(this);
+      fusedLocationClient.getLastLocation().addOnCompleteListener(task -> {
+        if (task.isSuccessful()) {
+          sendLocation(task.getResult());
         } else {
-          Location location = null;
-          if (isGPSEnabled)  {
-            // locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, MIN_DISTANCE_CHANGE_FOR_UPDATES, MIN_TIME_BW_UPDATES, locationListener);
-            location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+          Log.d(TAG, "getLocation error", task.getException().getCause());
+          stopSelf();
+        }
+      });
+    }
+
+  private void sendLocation(Location location) {
+    if(location != null) {
+      Thread thread = new Thread(() -> {
+        try {
+          String[] fromDatabase = getFromDB();
+
+          if(fromDatabase != null && fromDatabase.length != 0) {
+
+            String uuid = fromDatabase[0];
+            String telefono = fromDatabase[1];
+
+            Log.d(TAG, "UUID: " + uuid);
+            Log.d(TAG, "TELEFONO: " + telefono);
+
+            java.net.URL url = new java.net.URL(/*"http://docker.eurohelp.es:5555/api/v1/tracking"*/ "http://e7c6a235.ngrok.io/api/v1/tracking");
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json;charset=UTF-8");
+            conn.setRequestProperty("Accept","application/json");
+            conn.setDoOutput(true);
+            conn.setDoInput(true);
+
+            String firebaseToken = FirebaseInstanceId.getInstance().getToken();
+
+            String authToken = getToken(uuid);
+            Log.d(TAG, "X-Auth-Token: " + android.util.Base64.encodeToString(authToken.getBytes(), android.util.Base64.NO_WRAP));
+
+            conn.setRequestProperty("X-Auth-Token", android.util.Base64.encodeToString(authToken.getBytes(), android.util.Base64.NO_WRAP));
+            conn.setRequestProperty("FCM-Token", firebaseToken);
+
+            org.json.JSONObject jsonParam = new org.json.JSONObject();
+            org.json.JSONObject jsonPosition = new org.json.JSONObject();
+
+            android.telephony.TelephonyManager manager = (android.telephony.TelephonyManager) getApplicationContext().getSystemService(Context.TELEPHONY_SERVICE);
+            String versionApp = "";
+            try {
+              android.content.pm.PackageInfo pInfo = getApplicationContext().getPackageManager().getPackageInfo(getPackageName(), 0);
+              versionApp = pInfo.versionName;
+            } catch (android.content.pm.PackageManager.NameNotFoundException e) {
+              e.printStackTrace();
+            }
+
+            Log.d(TAG, "operadora: " + manager.getSimOperatorName());
+
+            jsonParam.put("SO", "Android");
+            jsonParam.put("fechaEnvio", new Date().getTime());
+            jsonParam.put("operadora", manager.getSimOperatorName());
+            jsonParam.put("versionApp", versionApp);
+            jsonParam.put("versionSO", android.os.Build.VERSION.RELEASE);
+            jsonParam.put("ubicacion", jsonPosition);
+            jsonParam.put("telefono", telefono);
+
+            jsonPosition.put("lat", location.getLatitude());
+            jsonPosition.put("lon", location.getLongitude());
+            jsonPosition.put("precision", location.getAccuracy());
+
+            Log.d(TAG, "FIREBASE TOKEN = " +  firebaseToken);
+            Log.d(TAG, "LOCATION = " +  jsonPosition.toString());
+
+            java.io.DataOutputStream os = new java.io.DataOutputStream(conn.getOutputStream());
+            os.writeBytes(jsonParam.toString());
+
+            os.flush();
+            os.close();
+
+            Log.d(TAG, "STATUS = " + String.valueOf(conn.getResponseCode()));
+            Log.d(TAG , "MSG = " + conn.getResponseMessage());
+
+            conn.disconnect();
           }
-          if (isNetworkEnabled && location == null) {
-            // locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, MIN_DISTANCE_CHANGE_FOR_UPDATES, MIN_TIME_BW_UPDATES, locationListener);
-            location = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-          }
-          sendLocation(location);
+        } catch (Exception e) {
+          Log.d(TAG , "ERROR = " + e.getMessage());
         }
-      } catch ( SecurityException e ) {
-        Log.d(TAG, "getLocation error", e.getCause());
         stopSelf();
+      });
+
+      thread.start();
+    } else {
+      Log.d(TAG, "location = null");
+      stopSelf();
+    }
+  }
+  private boolean hasPermission() {
+    final String [] permissions = { Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION };
+    for (String permission : permissions){
+      if(androidx.core.app.ActivityCompat.checkSelfPermission(getApplicationContext(), permission) != android.content.pm.PackageManager.PERMISSION_GRANTED){
+        return false;
       }
     }
-    private void sendLocation(Location location) {
-      if(location != null) {
-          Thread thread = new Thread(() -> {
-              try {
-                java.net.URL url = new java.net.URL("http://docker.eurohelp.es:5555/api/v1/tracking");
-                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/json;charset=UTF-8");
-                conn.setRequestProperty("Accept","application/json");
-                conn.setDoOutput(true);
-                conn.setDoInput(true);
+    return true;
+  }
 
-                String currentToken = FirebaseInstanceId.getInstance().getToken();
 
-                conn.setRequestProperty("X-Auth-Token", "hoioolaaaa");
 
-                org.json.JSONObject jsonParam = new org.json.JSONObject();
-                org.json.JSONObject jsonPosition = new org.json.JSONObject();
+    private static javax.crypto.spec.SecretKeySpec getSecretKey(String secretKeyInstance, String salt, int pswdIterations, int keySize) {
+      try {
+        javax.crypto.SecretKeyFactory factory = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1");
+        java.security.spec.KeySpec spec = new javax.crypto.spec.PBEKeySpec(secretKeyInstance.toCharArray(), /*salt.getBytes()*/ Hex.decodeHex(salt.toCharArray()), pswdIterations, keySize);
 
-                jsonParam.put("sessionID", "1575375698103");
-                jsonParam.put("firebaseToken", currentToken);
-                jsonParam.put("position", jsonPosition);
-
-                jsonPosition.put("timestamp", location.getTime());
-                jsonPosition.put("latitude", location.getLatitude());
-                jsonPosition.put("longitude", location.getLongitude());
-                jsonPosition.put("altitude", location.getAltitude());
-                jsonPosition.put("accuracy", location.getAccuracy());
-
-                Log.d(TAG, "FIREBASE TOKEN = " +  currentToken);
-                Log.d(TAG, "LOCATION = " +  jsonPosition.toString());
-
-                java.io.DataOutputStream os = new java.io.DataOutputStream(conn.getOutputStream());
-                os.writeBytes(jsonParam.toString());
-
-                os.flush();
-                os.close();
-
-                Log.d(TAG, "STATUS = " + String.valueOf(conn.getResponseCode()));
-                Log.d(TAG , "MSG = " + conn.getResponseMessage());
-
-                conn.disconnect();
-              } catch (Exception e) {
-                Log.d(TAG , "ERROR = " + e.getMessage());
-              }
-              stopSelf();
-          });
-
-          thread.start();
-      } else {
-        Log.d(TAG, "location = null");
-        stopSelf();
+        return new javax.crypto.spec.SecretKeySpec(factory.generateSecret(spec).getEncoded(), "AES");
+      } catch (java.security.spec.InvalidKeySpecException e) {
+        e.printStackTrace();
+      } catch (java.security.NoSuchAlgorithmException e) {
+        e.printStackTrace();
+      } catch (Exception e) {
+        e.printStackTrace();
       }
+      return null;
     }
 
-    private boolean hasPermission() {
-      final String [] permissions = { Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION };
-      for (String permission : permissions){
-        if(androidx.core.app.ActivityCompat.checkSelfPermission(getApplicationContext(), permission) != android.content.pm.PackageManager.PERMISSION_GRANTED){
-          return false;
-        }
-      }
-      return true;
+    private static String getToken(String uuid) throws Exception {
+
+      int pswdIterations = 10;
+      int keySize = 256;
+      String cypherInstance = "AES/CBC/PKCS5Padding";
+      String secretKeyInstance = "pvBHOsitvs0mt9OLabzxkAu806FHjVcxeE2QWbahtYrKX6lY5KjdaBbYxEwFow2s";
+      String AESSalt = "00000000000000000000000000000000";
+      String initializationVector = "0000000000000000";
+
+      long timestamp = new Date().getTime();
+      String plaintext = uuid + "+" + timestamp;
+
+      javax.crypto.spec.SecretKeySpec skeySpec = getSecretKey(secretKeyInstance, AESSalt, pswdIterations, keySize);
+
+      javax.crypto.Cipher cipher = javax.crypto.Cipher.getInstance(cypherInstance);
+
+      cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, skeySpec, new javax.crypto.spec.IvParameterSpec(initializationVector.getBytes()));
+
+      byte[] encrypted = cipher.doFinal(plaintext.getBytes());
+
+      return (android.util.Base64.encodeToString(encrypted, android.util.Base64.DEFAULT) + ":" + timestamp);
     }
 
-  private Location getLastKnownLocation(LocationManager locationManager) throws SecurityException {
-    java.util.List<String> providers = locationManager.getProviders(true);
-    Location bestLocation = null;
-    for (String provider : providers) {
-      Location location = locationManager.getLastKnownLocation(provider);
-      if (location != null) {
-        if (bestLocation == null || location.getAccuracy() < bestLocation.getAccuracy()) {
-          bestLocation = location;
-        }
-      }
+  private String[] getFromDB() {
+    String DB_PATH;
+    if (android.os.Build.VERSION.SDK_INT >= 17)
+      DB_PATH = getApplicationContext().getApplicationInfo().dataDir + "/databases/";
+    else
+      DB_PATH = "/data/data/" + getApplicationContext().getPackageName() + "/databases/";
+
+    java.io.File dbfile = new java.io.File(DB_PATH + "APP112");
+    if (!dbfile.exists()) {
+      return null;
     }
-    return bestLocation;
+    android.database.sqlite.SQLiteDatabase mydb = android.database.sqlite.SQLiteDatabase.openDatabase(dbfile.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+
+    android.database.Cursor resultSet = mydb.rawQuery("select uuid, telefono from personalData", null);
+    resultSet.moveToFirst();
+
+    return new String [] { resultSet.getString(0), resultSet.getString(1) };
   }
 
 }
 
+class Hex {
+
+  public static byte[] decodeHex(char[] data) throws Exception {
+    int len = data.length;
+    if ((len & 0x01) != 0) {
+      throw new Exception("Odd number of characters.");
+    }
+    byte[] out = new byte[len >> 1];
+    // two characters form the hex value.
+    for (int i = 0, j = 0; j < len; i++) {
+      int f = toDigit(data[j], j) << 4;
+      j++;
+      f = f | toDigit(data[j], j);
+      j++;
+      out[i] = (byte) (f & 0xFF);
+    }
+    return out;
+  }
+  protected static int toDigit(char ch, int index) throws Exception {
+    int digit = Character.digit(ch, 16);
+    if (digit == -1) {
+      throw new Exception("Illegal hexadecimal charcter " + ch + " at index " + index);
+    }
+    return digit;
+  }
+
+}

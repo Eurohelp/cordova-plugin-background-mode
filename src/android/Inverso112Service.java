@@ -112,7 +112,7 @@ public class Inverso112Service extends Service {
     Intent alarmIntent = new Intent(this, Inverso112Receiver.class);
     alarmIntent.setAction(Inverso112Receiver.ACTION_ALARM);
     PendingIntent pendingIntent = PendingIntent.getBroadcast(this, 0, alarmIntent, 0);
-    alarmManager.set(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + (1000 * 60 * 1), pendingIntent);
+    alarmManager.set(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + (1000 * 60 * 30), pendingIntent);
   }
 
      /* Create a notification as the visible part to be able to put the service

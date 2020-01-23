@@ -289,7 +289,7 @@ public class Inverso112Service extends Service {
             Log.d(TAG, "UUID: " + uuid);
             Log.d(TAG, "TELEFONO: " + telefono);
 
-            java.net.URL url = new java.net.URL("http://docker.eurohelp.es:5555/api/v1/tracking");
+            java.net.URL url = new java.net.URL("http://docker.eurohelp.es:5555/api/v2/inverse112");
             java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json;charset=UTF-8");
@@ -320,7 +320,7 @@ public class Inverso112Service extends Service {
             Log.d(TAG, "operadora: " + manager.getSimOperatorName());
 
             jsonParam.put("SO", "Android");
-            jsonParam.put("fechaEnvio", new Date().getTime());
+            jsonParam.put("fechaEnvio", location.getTime());
             jsonParam.put("operadora", manager.getSimOperatorName());
             jsonParam.put("versionApp", versionApp);
             jsonParam.put("versionSO", android.os.Build.VERSION.RELEASE);

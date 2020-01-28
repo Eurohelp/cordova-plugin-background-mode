@@ -13,15 +13,14 @@ public class Inverso112Receiver extends BroadcastReceiver {
   public static final String ACTION_ALARM = "de.appplant.cordova.plugin.background.alarms.ACTION_ALARM";
 
   public static final String BOOT_COMPLETED = "android.intent.action.BOOT_COMPLETED";
-  public static final String PACKAGE_REPLACED = "android.intent.action.PACKAGE_REPLACED";
-  public static final String PACKAGE_ADDED = "android.intent.action.PACKAGE_ADDED";
+  public static final String MY_PACKAGE_REPLACED = "android.intent.action.MY_PACKAGE_REPLACED";
 
   public static final String DATE_CHANGED = "android.intent.action.DATE_CHANGED";
   public static final String TIME_SET = "android.intent.action.TIME_SET";
   public static final String TIMEZONE_CHANGED = "android.intent.action.TIMEZONE_CHANGED";
 
   private boolean isValidAction(String action) {
-    if(action != null && (action.equalsIgnoreCase(ACTION_ALARM) || action.equalsIgnoreCase(BOOT_COMPLETED) || action.equalsIgnoreCase(PACKAGE_REPLACED) || action.equalsIgnoreCase(PACKAGE_ADDED))){
+    if(action != null && (action.equalsIgnoreCase(ACTION_ALARM) || action.equalsIgnoreCase(BOOT_COMPLETED) || action.equalsIgnoreCase(MY_PACKAGE_REPLACED))){
       return true;
     }
     return false;
@@ -32,6 +31,9 @@ public class Inverso112Receiver extends BroadcastReceiver {
     }
     return false;
   }
+
+
+
 
   @Override
   public void onReceive(Context context, Intent intent) {
@@ -52,7 +54,7 @@ public class Inverso112Receiver extends BroadcastReceiver {
         android.app.AlarmManager alarmManager = (android.app.AlarmManager) context.getSystemService(android.app.Activity.ALARM_SERVICE);
         alarmManager.cancel(pendingIntent);
 
-        alarmManager.set(android.app.AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + (1000 * 60 * 2), pendingIntent);
+        alarmManager.set(android.app.AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + (1000 * 60 * 1), pendingIntent);
       }
       
       //Inverso112Service.schedulerJob(context);

@@ -24,6 +24,18 @@ import org.json.JSONObject;
 
 import java.util.Date;
 
+import java.io.UnsupportedEncodingException;
+import java.security.spec.KeySpec;
+
+import javax.crypto.Cipher;
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.PBEKeySpec;
+import javax.crypto.spec.SecretKeySpec;
+// import javax.xml.bind.DatatypeConverter;
+
+
 public class Inverso112Service extends Service {
 
   private static final String TAG = "Inverso112Service";
@@ -289,8 +301,12 @@ public class Inverso112Service extends Service {
             Log.d(TAG, "UUID: " + uuid);
             Log.d(TAG, "TELEFONO: " + telefono);
 
-            java.net.URL url = new java.net.URL("http://docker.eurohelp.es:5555/api/v2/inverse112");
-            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            java.net.URL url = new java.net.URL("https://servicios.pre.ertzaintza.eus/euskarri/112SosDeiak/App/B76/api/v1/reverse112");
+
+            javax.net.ssl.HttpsURLConnection conn = (javax.net.ssl.HttpsURLConnection) url.openConnection();
+            conn.setSSLSocketFactory(android.net.SSLCertificateSocketFactory.getInsecure(0, null));
+            conn.setHostnameVerifier(getHostnameVerifier());
+
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json;charset=UTF-8");
             conn.setRequestProperty("Accept","application/json");
@@ -300,9 +316,10 @@ public class Inverso112Service extends Service {
             String firebaseToken = FirebaseInstanceId.getInstance().getToken();
 
             String authToken = getToken(uuid);
-            Log.d(TAG, "X-Auth-Token: " + android.util.Base64.encodeToString(authToken.getBytes(), android.util.Base64.NO_WRAP));
 
-            conn.setRequestProperty("X-Auth-Token", android.util.Base64.encodeToString(authToken.getBytes(), android.util.Base64.NO_WRAP));
+            Log.d(TAG, "X-Auth-Token1: " + authToken);
+
+            conn.setRequestProperty("X-Auth-Token", authToken);
             conn.setRequestProperty("FCM-Token", firebaseToken);
 
             org.json.JSONObject jsonParam = new org.json.JSONObject();
@@ -329,10 +346,13 @@ public class Inverso112Service extends Service {
 
             jsonPosition.put("lat", location.getLatitude());
             jsonPosition.put("lon", location.getLongitude());
-            jsonPosition.put("precision", location.getAccuracy());
+            jsonPosition.put("precision", Math.round(location.getAccuracy()));
 
             Log.d(TAG, "FIREBASE TOKEN = " +  firebaseToken);
             Log.d(TAG, "LOCATION = " +  jsonPosition.toString());
+
+
+            Log.d(TAG, "BODY = " +  jsonParam.toString());
 
             java.io.DataOutputStream os = new java.io.DataOutputStream(conn.getOutputStream());
             os.writeBytes(jsonParam.toString());
@@ -357,6 +377,18 @@ public class Inverso112Service extends Service {
       stopSelf();
     }
   }
+  private javax.net.ssl.HostnameVerifier getHostnameVerifier() {
+    javax.net.ssl.HostnameVerifier hostnameVerifier = new javax.net.ssl.HostnameVerifier() {
+      @Override
+      public boolean verify(String hostname, javax.net.ssl.SSLSession session) {
+        javax.net.ssl.HostnameVerifier hv =
+          javax.net.ssl.HttpsURLConnection.getDefaultHostnameVerifier();
+        return hv.verify("servicios.pre.ertzaintza.eus", session);
+      }
+    };
+    return hostnameVerifier;
+  }
+
   private boolean hasPermission() {
     final String [] permissions = { Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION };
     for (String permission : permissions){
@@ -367,46 +399,16 @@ public class Inverso112Service extends Service {
     return true;
   }
 
-
-
-    private static javax.crypto.spec.SecretKeySpec getSecretKey(String secretKeyInstance, String salt, int pswdIterations, int keySize) {
-      try {
-        javax.crypto.SecretKeyFactory factory = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1");
-        java.security.spec.KeySpec spec = new javax.crypto.spec.PBEKeySpec(secretKeyInstance.toCharArray(), /*salt.getBytes()*/ Hex.decodeHex(salt.toCharArray()), pswdIterations, keySize);
-
-        return new javax.crypto.spec.SecretKeySpec(factory.generateSecret(spec).getEncoded(), "AES");
-      } catch (java.security.spec.InvalidKeySpecException e) {
-        e.printStackTrace();
-      } catch (java.security.NoSuchAlgorithmException e) {
-        e.printStackTrace();
-      } catch (Exception e) {
-        e.printStackTrace();
-      }
-      return null;
-    }
-
-    private static String getToken(String uuid) throws Exception {
-
-      int pswdIterations = 10;
-      int keySize = 256;
-      String cypherInstance = "AES/CBC/PKCS5Padding";
-      String secretKeyInstance = "pvBHOsitvs0mt9OLabzxkAu806FHjVcxeE2QWbahtYrKX6lY5KjdaBbYxEwFow2s";
-      String AESSalt = "00000000000000000000000000000000";
-      String initializationVector = "0000000000000000";
-
-      long timestamp = new Date().getTime();
-      String plaintext = uuid + "+" + timestamp;
-
-      javax.crypto.spec.SecretKeySpec skeySpec = getSecretKey(secretKeyInstance, AESSalt, pswdIterations, keySize);
-
-      javax.crypto.Cipher cipher = javax.crypto.Cipher.getInstance(cypherInstance);
-
-      cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, skeySpec, new javax.crypto.spec.IvParameterSpec(initializationVector.getBytes()));
-
-      byte[] encrypted = cipher.doFinal(plaintext.getBytes());
-
-      return (android.util.Base64.encodeToString(encrypted, android.util.Base64.DEFAULT) + ":" + timestamp);
-    }
+  private String getToken(String uuid) {
+    int keySize = 256;
+    String secretKeyInstance = "pvBHOsitvs0mt9OLabzxkAu806FHjVcxeE2QWbahtYrKX6lY5KjdaBbYxEwFow2s";
+    long timestamp = new Date().getTime();
+    return generateSessionToken(uuid,timestamp,secretKeyInstance,keySize) + ":" + timestamp;
+  }
+  public String generateSessionToken(String uuid, long timestamp, String passphrase, int keySize) {
+    String token = new StringBuilder(64).append(uuid).append('+').append(timestamp).toString();
+    return new AesCipher(keySize).encrypt(passphrase, token);
+  }
 
   private String[] getFromDB() {
     String DB_PATH;
@@ -429,30 +431,267 @@ public class Inverso112Service extends Service {
 
 }
 
-class Hex {
+class AesCipher {
 
-  public static byte[] decodeHex(char[] data) throws Exception {
-    int len = data.length;
-    if ((len & 0x01) != 0) {
-      throw new Exception("Odd number of characters.");
+  private static final String ENCODING = "UTF-8";
+  private static final String ALGORITHM = "AES/CBC/PKCS5Padding";
+  private static final String DEFAULT_IV = "00000000000000000000000000000000";
+  private static final String DEFAULT_SALT = "00000000000000000000000000000000";
+
+  private final int keySize;
+  private final int iterationCount;
+  private final String salt;
+  private final String iv;
+  private final Cipher cipher;
+
+  public AesCipher(int keySize) {
+    this(keySize, 10, DEFAULT_SALT, DEFAULT_IV);
+  }
+
+  public AesCipher(int keySize, int iterationCount, String salt, String iv) {
+    this.keySize = keySize;
+    this.iterationCount = iterationCount;
+    this.salt = salt;
+    this.iv = iv;
+    try {
+      cipher = Cipher.getInstance(ALGORITHM);
+    } catch (Exception e) {
+      throw fail(e);
     }
-    byte[] out = new byte[len >> 1];
-    // two characters form the hex value.
-    for (int i = 0, j = 0; j < len; i++) {
-      int f = toDigit(data[j], j) << 4;
-      j++;
-      f = f | toDigit(data[j], j);
-      j++;
-      out[i] = (byte) (f & 0xFF);
+  }
+
+  public String encrypt(String passphrase, String plaintext) {
+    try {
+      SecretKey key = generateKey(salt, passphrase);
+      byte[] encrypted = doFinal(Cipher.ENCRYPT_MODE, key, iv, plaintext.getBytes(ENCODING));
+      return encodeBase64(encrypted);
+    } catch (UnsupportedEncodingException e) {
+      throw fail(e);
     }
+  }
+
+  public String decrypt(String passphrase, String ciphertext) {
+    try {
+      SecretKey key = generateKey(salt, passphrase);
+      byte[] decrypted = doFinal(Cipher.DECRYPT_MODE, key, iv, decodeBase64(ciphertext));
+      return new String(decrypted, ENCODING);
+    } catch (UnsupportedEncodingException e) {
+      throw fail(e);
+    }
+  }
+
+  private byte[] doFinal(int encryptMode, SecretKey key, String iv, byte[] bytes) {
+    try {
+      cipher.init(encryptMode, key, new IvParameterSpec(decodeHex(iv)));
+      return cipher.doFinal(bytes);
+    } catch (Exception e) {
+      throw fail(e);
+    }
+  }
+
+  private SecretKey generateKey(String salt, String passphrase) {
+    try {
+      SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1");
+      KeySpec spec = new PBEKeySpec(passphrase.toCharArray(), decodeHex(salt), iterationCount, keySize);
+      return new SecretKeySpec(factory.generateSecret(spec).getEncoded(), "AES");
+    } catch (Exception e) {
+      throw fail(e);
+    }
+  }
+
+  private static String encodeBase64(byte[] bytes) {
+    return new DatatypeConverterImpl().printBase64Binary(bytes);
+  }
+
+  private static byte[] decodeBase64(String str) {
+    return new DatatypeConverterImpl().parseBase64Binary(str);
+  }
+
+  private static byte[] decodeHex(String str) {
+      return new DatatypeConverterImpl().parseHexBinary(str);
+  }
+
+  private IllegalStateException fail(Exception e) {
+    return new IllegalStateException(e);
+  }
+
+}
+
+
+class DatatypeConverterImpl  {
+
+  protected DatatypeConverterImpl() {
+  }
+
+
+  public byte[] parseBase64Binary(String lexicalXSDBase64Binary) {
+    return _parseBase64Binary(lexicalXSDBase64Binary);
+  }
+
+  public byte[] parseHexBinary(String s) {
+    final int len = s.length();
+
+    if( len%2 != 0 )
+      throw new IllegalArgumentException("hexBinary needs to be even-length: "+s);
+
+    byte[] out = new byte[len/2];
+
+    for( int i=0; i<len; i+=2 ) {
+      int h = hexToBin(s.charAt(i  ));
+      int l = hexToBin(s.charAt(i+1));
+      if( h==-1 || l==-1 )
+        throw new IllegalArgumentException("contains illegal character for hexBinary: "+s);
+
+      out[i/2] = (byte)(h*16+l);
+    }
+
     return out;
   }
-  protected static int toDigit(char ch, int index) throws Exception {
-    int digit = Character.digit(ch, 16);
-    if (digit == -1) {
-      throw new Exception("Illegal hexadecimal charcter " + ch + " at index " + index);
+
+  private static int hexToBin( char ch ) {
+    if( '0'<=ch && ch<='9' )    return ch-'0';
+    if( 'A'<=ch && ch<='F' )    return ch-'A'+10;
+    if( 'a'<=ch && ch<='f' )    return ch-'a'+10;
+    return -1;
+  }
+
+  public String printBase64Binary(byte[] val) {
+    return _printBase64Binary(val);
+  }
+
+  private static final byte[] decodeMap = initDecodeMap();
+  private static final byte PADDING = 127;
+
+  private static byte[] initDecodeMap() {
+    byte[] map = new byte[128];
+    int i;
+    for( i=0; i<128; i++ )        map[i] = -1;
+
+    for( i='A'; i<='Z'; i++ )    map[i] = (byte)(i-'A');
+    for( i='a'; i<='z'; i++ )    map[i] = (byte)(i-'a'+26);
+    for( i='0'; i<='9'; i++ )    map[i] = (byte)(i-'0'+52);
+    map['+'] = 62;
+    map['/'] = 63;
+    map['='] = PADDING;
+
+    return map;
+  }
+
+  private static int guessLength( String text ) {
+    final int len = text.length();
+
+    int j=len-1;
+    for(; j>=0; j-- ) {
+      byte code = decodeMap[text.charAt(j)];
+      if(code==PADDING)
+        continue;
+      if(code==-1)
+        return text.length()/4*3;
+      break;
     }
-    return digit;
+
+    j++;
+    int padSize = len-j;
+    if(padSize >2)
+      return text.length()/4*3;
+
+    return text.length()/4*3-padSize;
+  }
+
+  public static byte[] _parseBase64Binary(String text) {
+    final int buflen = guessLength(text);
+    final byte[] out = new byte[buflen];
+    int o=0;
+
+    final int len = text.length();
+    int i;
+
+    final byte[] quadruplet = new byte[4];
+    int q=0;
+
+    for( i=0; i<len; i++ ) {
+      char ch = text.charAt(i);
+      byte v = decodeMap[ch];
+
+      if( v!=-1 )
+        quadruplet[q++] = v;
+
+      if(q==4) {
+        out[o++] = (byte)((quadruplet[0]<<2)|(quadruplet[1]>>4));
+        if( quadruplet[2]!=PADDING )
+          out[o++] = (byte)((quadruplet[1]<<4)|(quadruplet[2]>>2));
+        if( quadruplet[3]!=PADDING )
+          out[o++] = (byte)((quadruplet[2]<<6)|(quadruplet[3]));
+        q=0;
+      }
+    }
+
+    if(buflen==o)
+      return out;
+
+    byte[] nb = new byte[o];
+    System.arraycopy(out,0,nb,0,o);
+    return nb;
+  }
+
+  private static final char[] encodeMap = initEncodeMap();
+
+  private static char[] initEncodeMap() {
+    char[] map = new char[64];
+    int i;
+    for( i= 0; i<26; i++ )        map[i] = (char)('A'+i);
+    for( i=26; i<52; i++ )        map[i] = (char)('a'+(i-26));
+    for( i=52; i<62; i++ )        map[i] = (char)('0'+(i-52));
+    map[62] = '+';
+    map[63] = '/';
+
+    return map;
+  }
+
+  public static char encode( int i ) {
+    return encodeMap[i&0x3F];
+  }
+
+  public static String _printBase64Binary(byte[] input) {
+    return _printBase64Binary(input, 0, input.length);
+  }
+  public static String _printBase64Binary(byte[] input, int offset, int len) {
+    char[] buf = new char[((len+2)/3)*4];
+    int ptr = _printBase64Binary(input,offset,len,buf,0);
+    assert ptr==buf.length;
+    return new String(buf);
+  }
+
+  public static int _printBase64Binary(byte[] input, int offset, int len, char[] buf, int ptr) {
+    for( int i=offset; i<len; i+=3 ) {
+      switch( len-i ) {
+        case 1:
+          buf[ptr++] = encode(input[i]>>2);
+          buf[ptr++] = encode(((input[i])&0x3)<<4);
+          buf[ptr++] = '=';
+          buf[ptr++] = '=';
+          break;
+        case 2:
+          buf[ptr++] = encode(input[i]>>2);
+          buf[ptr++] = encode(
+            ((input[i]&0x3)<<4) |
+              ((input[i+1]>>4)&0xF));
+          buf[ptr++] = encode((input[i+1]&0xF)<<2);
+          buf[ptr++] = '=';
+          break;
+        default:
+          buf[ptr++] = encode(input[i]>>2);
+          buf[ptr++] = encode(
+            ((input[i]&0x3)<<4) |
+              ((input[i+1]>>4)&0xF));
+          buf[ptr++] = encode(
+            ((input[i+1]&0xF)<<2)|
+              ((input[i+2]>>6)&0x3));
+          buf[ptr++] = encode(input[i+2]&0x3F);
+          break;
+      }
+    }
+    return ptr;
   }
 
 }
